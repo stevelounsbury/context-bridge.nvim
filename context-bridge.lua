@@ -238,14 +238,36 @@ function M.send_line()
   send_to_agent(text, context, current_line, current_line)
 end
 
--- Send entire file
+-- Send file path reference
 function M.send_file()
-  local lines = vim.api.nvim_buf_get_lines(0, 0, -1, false)
-  local text = table.concat(lines, '\n')
-  local total_lines = vim.fn.line('$')
-  
+  local relative_filename = vim.fn.expand('%')
   local context = get_context_input()
-  send_to_agent(text, context, 1, total_lines)
+  
+  -- Get the tmux pane
+  local pane_id = M.get_agent_pane(false)
+  if not pane_id then
+    vim.notify("Error: Could not find agent tmux pane", vim.log.levels.ERROR)
+    return false
+  end
+  
+  -- Build simple message
+  local message = ''
+  if context and context ~= '' then
+    message = context .. '\n\n'
+  end
+  message = message .. 'File: ' .. relative_filename
+  
+  -- Clear input and send
+  os.execute('tmux send-keys -t ' .. pane_id .. ' C-c')
+  vim.wait(200)
+  
+  local escaped_message = message:gsub("'", "'\"'\"'")
+  os.execute(string.format("tmux send-keys -t %s -l '%s'", pane_id, escaped_message))
+  
+  vim.wait(100)
+  os.execute('tmux send-keys -t ' .. pane_id .. ' Enter')
+  
+  vim.notify('Sent file reference to agent (pane ' .. pane_id .. ')', vim.log.levels.INFO)
 end
 
 -- Send a specific range
@@ -298,7 +320,7 @@ function M._setup_keymaps()
   if keymaps.file_send then
     vim.keymap.set('n', keymaps.file_send, function()
       M.send_file()
-    end, { desc = 'Send entire file to agent' })
+    end, { desc = 'Send file reference to agent' })
   end
 end
 
