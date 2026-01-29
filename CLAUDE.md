@@ -34,7 +34,8 @@ Context Bridge is a Neovim plugin that enables seamless integration with any AI 
 ### Multiple Input Methods
 - Visual selection with context (`<leader>cc`)
 - Current line with context (`<leader>cl`)
-- Entire file with context (`<leader>cf`)
+- File reference/metadata (`<leader>cf`) - sends filename, type, line count, size
+- Full file contents via `:ContextBridgeSendFileContents` command
 - Custom line ranges via commands
 - Proper file and line number reporting
 
@@ -59,12 +60,13 @@ require('context-bridge').setup({
 ### Keymaps
 - `,cc` - Send visual selection to agent
 - `,cl` - Send current line to agent
-- `,cf` - Send entire file to agent
+- `,cf` - Send file reference (metadata only: name, type, lines, size)
 
 ### Commands
 - `:ContextBridgeSend` - Send visual selection or range
 - `:ContextBridgeSendLine` - Send current line
-- `:ContextBridgeSendFile` - Send entire file
+- `:ContextBridgeSendFile` - Send file reference (metadata only)
+- `:ContextBridgeSendFileContents` - Send entire file contents
 - `:ContextBridgeSelectPane` - Force pane re-selection
 - `:ContextBridgeClearCache` - Clear cached pane selection
 
@@ -72,6 +74,8 @@ require('context-bridge').setup({
 ```vim
 :lua require('context-bridge').send_line()
 :lua require('context-bridge').send_visual()
+:lua require('context-bridge').send_file()
+:lua require('context-bridge').send_file_contents()
 :lua require('context-bridge').get_agent_pane()
 ```
 
@@ -115,6 +119,8 @@ In file [relative_filename] (lines X-Y):
 4. **Restructured message format** to put questions first
 5. **Renamed to context-bridge** for generic AI agent support
 6. **Cleaned up** all Claude-specific references
+7. **Added Escape cancellation** - pressing Escape during context prompt cancels the operation
+8. **Changed file send to metadata** - `send_file()` now sends reference info, added `send_file_contents()` for full contents
 
 ## Current Status
 
