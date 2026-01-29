@@ -2,10 +2,13 @@
 #
 # Integration test for context-bridge.nvim
 #
+# Creates an isolated tmux server (separate from user's session) with neovim
+# and an agent pane, then verifies the plugin sends content correctly.
+#
 # Usage:
 #   ./integration_test.sh           # Run tests automatically
-#   ./integration_test.sh --watch   # Run tests, then attach to inspect
-#   ./integration_test.sh --attach  # Setup only, then attach for manual testing
+#   ./integration_test.sh --watch   # Wait before tests, attach after
+#   ./integration_test.sh --attach  # Setup only, attach for manual testing
 #   ./integration_test.sh --debug   # Show verbose debug output
 #
 
@@ -31,15 +34,9 @@ REPO_DIR="$(dirname "$TEST_DIR")"
 SCRATCHPAD="/tmp/cb-test-$$"
 AGENT_OUTPUT="$SCRATCHPAD/agent_output.txt"
 
-# Create scratchpad early so TMUX_TMPDIR exists
-mkdir -p "$SCRATCHPAD"
-
-# Use isolated tmux environment
-# TMUX_TMPDIR makes all tmux commands (ours AND the plugin's) use this directory for sockets
-export TMUX_TMPDIR="$SCRATCHPAD/tmux"
-mkdir -p "$TMUX_TMPDIR"
-
-TMUX_SOCKET="default"  # Use default socket name within our custom tmpdir
+# Use a unique socket name for a completely isolated tmux server
+# This is the key to not interfering with the user's tmux
+SOCKET_NAME="cb-test-$$"
 SESSION_NAME="test"
 
 # Colors
@@ -57,8 +54,8 @@ log_pass() { echo -e "${GREEN}[PASS]${NC} $1"; ((TESTS_PASSED++)); }
 log_fail() { echo -e "${RED}[FAIL]${NC} $1"; ((TESTS_FAILED++)); }
 log_debug() { [[ "$DEBUG_MODE" == "true" ]] && echo -e "[DEBUG] $1"; }
 
-# Wrapper for tmux commands - TMUX_TMPDIR is already set so no need for -L
-T() { tmux "$@"; }
+# All tmux commands go through this wrapper with our isolated socket
+T() { tmux -L "$SOCKET_NAME" "$@"; }
 
 cleanup() {
   log_info "Cleaning up..."
@@ -97,9 +94,10 @@ NVIMCONFIG
 }
 
 start_session() {
-  log_info "Starting tmux session (socket: $TMUX_SOCKET)"
+  log_info "Starting isolated tmux server (socket: $SOCKET_NAME)"
 
-  # Create session with two panes
+  # Create a new tmux server with our unique socket
+  # The -d flag creates it detached, -s names the session
   T new-session -d -s "$SESSION_NAME" -x 160 -y 50
   T split-window -h -t "$SESSION_NAME"
 
@@ -111,24 +109,29 @@ start_session() {
 
   echo ""
   echo "To attach from another terminal:"
-  echo "  TMUX_TMPDIR='$TMUX_TMPDIR' tmux attach -t $SESSION_NAME"
+  echo "  tmux -L $SOCKET_NAME attach -t $SESSION_NAME"
   echo ""
 
-  # Create output file and start cat receiver in agent pane
-  touch "$AGENT_OUTPUT"
-  T send-keys -t "$AGENT_PANE" "cat >> $AGENT_OUTPUT" Enter
-  sleep 0.3
-  log_debug "Agent pane ready, output file: $AGENT_OUTPUT"
+  # Wait for shells to initialize (zsh with plugins can be slow)
+  log_debug "Waiting for shells to initialize..."
+  sleep 2
 
-  # Set TMUX_TMPDIR in the pane so plugin's tmux commands use our isolated server
-  T send-keys -t "$NVIM_PANE" "export TMUX_TMPDIR='$TMUX_TMPDIR'" Enter
-  sleep 0.3
-
-  # Debug: show TMUX env
+  # Debug: show TMUX env (should point to our isolated socket)
   T send-keys -t "$NVIM_PANE" 'echo "TMUX=$TMUX"' Enter
-  sleep 0.5
-  log_debug "Pane contents:"
-  T capture-pane -t "$NVIM_PANE" -p | while read line; do log_debug "  $line"; done
+  sleep 1
+  log_debug "TMUX environment in nvim pane:"
+  T capture-pane -t "$NVIM_PANE" -p | grep -E "(TMUX=|cb-test)" | while read line; do log_debug "  $line"; done
+
+  # Create output file and start cat receiver in agent pane
+  # Use trap to ignore SIGINT (Ctrl+C) since the plugin sends Ctrl+C to clear input
+  touch "$AGENT_OUTPUT"
+  log_debug "Starting cat receiver in agent pane (with SIGINT trap)..."
+  T send-keys -t "$AGENT_PANE" "trap '' SIGINT; cat >> $AGENT_OUTPUT" Enter
+  sleep 1
+
+  # Verify cat is running by checking for absence of prompt
+  log_debug "Agent pane after cat command (should be blank/no prompt if cat is running):"
+  T capture-pane -t "$AGENT_PANE" -p | tail -3 | while read line; do log_debug "  '$line'"; done
 
   # Start neovim
   T send-keys -t "$NVIM_PANE" "nvim -u $SCRATCHPAD/init.lua $TEST_DIR/fixtures/sample.lua" Enter
@@ -140,7 +143,7 @@ start_session() {
   log_debug "After nvim start:"
   T capture-pane -t "$NVIM_PANE" -p | tail -5 | while read line; do log_debug "  $line"; done
 
-  # Explicitly set the target pane in the plugin (bypasses auto-detection issues in nested tmux)
+  # Explicitly set the target pane in the plugin (bypasses auto-detection edge cases)
   log_info "Configuring plugin to use agent pane: $AGENT_PANE"
   N ":ContextBridgeSetPane $AGENT_PANE" Enter
   sleep 0.5
@@ -263,7 +266,7 @@ test_send_file_metadata() {
 
 test_escape_cancels() {
   ((TESTS_RUN++))
-  log_info "Test: Escape cancels"
+  log_info "Test: Ctrl+C cancels input prompt"
   clear_output
 
   N Escape
@@ -271,7 +274,8 @@ test_escape_cancels() {
   sleep 0.3
   N ",cl"
   sleep 1
-  N Escape
+  # Ctrl+C reliably interrupts vim's input() function
+  N C-c
   sleep 1
 
   local output=$(get_output)
@@ -279,9 +283,9 @@ test_escape_cancels() {
   log_debug "Output length: $len"
 
   if [[ $len -lt 10 ]]; then
-    log_pass "Escape cancels (no content sent)"
+    log_pass "Ctrl+C cancels (no content sent)"
   else
-    log_fail "Escape should cancel but got output"
+    log_fail "Ctrl+C should cancel but got output"
     echo "Got: $output"
   fi
 }

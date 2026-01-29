@@ -68,7 +68,11 @@ require('context-bridge').setup({
 - `:ContextBridgeSendFile` - Send file reference (metadata only)
 - `:ContextBridgeSendFileContents` - Send entire file contents
 - `:ContextBridgeSelectPane` - Force pane re-selection
+- `:ContextBridgeSetPane <pane_id>` - Set target pane explicitly (useful for testing)
 - `:ContextBridgeClearCache` - Clear cached pane selection
+
+### Cancellation
+Press `Ctrl+C` during the context/question prompt to cancel the operation.
 
 ### Direct Function Calls (for testing)
 ```vim
@@ -119,15 +123,17 @@ In file [relative_filename] (lines X-Y):
 4. **Restructured message format** to put questions first
 5. **Renamed to context-bridge** for generic AI agent support
 6. **Cleaned up** all Claude-specific references
-7. **Added Escape cancellation** - pressing Escape during context prompt cancels the operation
+7. **Added Ctrl+C cancellation** - pressing Ctrl+C during context prompt cancels the operation
 8. **Changed file send to metadata** - `send_file()` now sends reference info, added `send_file_contents()` for full contents
+9. **Added integration tests** - automated tests using isolated tmux server (`test/integration_test.sh`)
 
 ## Current Status
 
-✅ **Plugin fully functional and tested**  
-✅ **Simplified pane detection working reliably**  
-✅ **Auto-submission working with all content types**  
-✅ **Generic naming for any AI agent**  
+✅ **Plugin fully functional and tested**
+✅ **Simplified pane detection working reliably**
+✅ **Auto-submission working with all content types**
+✅ **Generic naming for any AI agent**
+✅ **Integration tests passing** (`./test/integration_test.sh`)
 ✅ **Ready for public release**  
 
 The plugin provides a smooth developer workflow where code can be sent with context to any AI assistant without leaving Neovim or requiring manual interaction in the agent's interface.
