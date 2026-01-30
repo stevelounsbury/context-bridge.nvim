@@ -4,18 +4,24 @@ A Neovim plugin that seamlessly bridges code context from your editor to any AI 
 
 ## Features
 
-- 🚀 **Auto-submission** - Send code + questions and auto-submit to your AI agent
-- 🎯 **Smart pane detection** - Automatically finds your agent in tmux (2-pane mode) or lets you select
-- 📝 **Multiple input methods** - Visual selection, current line, or entire file
-- 🔄 **Persistent caching** - Remembers your agent pane across uses
-- 🌟 **Context-first messaging** - Questions appear before code for better AI comprehension
+- **Send & Submit** - Send code + questions and auto-submit to your AI agent
+- **Stage Mode** - Build multi-part prompts by staging content without submitting
+- **Plain Text** - Send arbitrary text without file/code context
+- **Smart Pane Detection** - Automatically finds your agent in tmux (2-pane mode) or lets you select
+- **Multiple Input Methods** - Visual selection, current line, file metadata, or entire file contents
+- **Persistent Caching** - Remembers your agent pane across uses
+- **Context-First Messaging** - Questions appear before code for better AI comprehension
 
-## Quick Demo
+## Quick Start
 
 1. Select some code in Neovim
 2. Press `,cc` (or your configured keymap)
 3. Type your question about the code
 4. Watch it auto-submit to your AI agent in tmux!
+
+**Or build a multi-part prompt:**
+1. `:ContextBridgeStageText` - "Here's what I'm working on:"
+2. `,cc` on some code - Adds code context and submits
 
 ## Installation
 
@@ -23,18 +29,18 @@ A Neovim plugin that seamlessly bridges code context from your editor to any AI 
 
 1. Download `context-bridge.lua` to your Neovim lua directory:
    ```bash
-   curl -o ~/.config/nvim/lua/context-bridge.lua https://raw.githubusercontent.com/stevelounsbury/context-bridge/main/context-bridge.lua
+   curl -o ~/.config/nvim/lua/context-bridge.lua \
+     https://raw.githubusercontent.com/stevelounsbury/context-bridge/main/context-bridge.lua
    ```
 
 2. Add to your `init.lua`:
    ```lua
    require('context-bridge').setup({
-     tmux_pane = 'agent',     -- Default pane identifier
-     prompt_prefix = 'In file',
      keymaps = {
        visual_send = '<leader>cc',  -- Send visual selection
-       line_send = '<leader>cl',    -- Send current line  
-       file_send = '<leader>cf',    -- Send entire file
+       line_send = '<leader>cl',    -- Send current line
+       file_send = '<leader>cf',    -- Send file metadata
+       text_send = '<leader>ct',    -- Send plain text
      }
    })
    ```
@@ -46,9 +52,7 @@ A Neovim plugin that seamlessly bridges code context from your editor to any AI 
 use {
   'stevelounsbury/context-bridge.nvim',
   config = function()
-    require('context-bridge').setup({
-      -- your config here
-    })
+    require('context-bridge').setup()
   end
 }
 ```
@@ -58,9 +62,7 @@ use {
 {
   'stevelounsbury/context-bridge.nvim',
   config = function()
-    require('context-bridge').setup({
-      -- your config here  
-    })
+    require('context-bridge').setup()
   end
 }
 ```
@@ -68,16 +70,44 @@ use {
 ## Usage
 
 ### Keymaps (with default leader `,`)
-- `,cc` - Send visual selection to agent
-- `,cl` - Send current line to agent  
-- `,cf` - Send entire file to agent
+
+| Keymap | Action |
+|--------|--------|
+| `,cc` | Send visual selection to agent |
+| `,cl` | Send current line to agent |
+| `,cf` | Send file metadata (name, type, lines, size) |
+| `,ct` | Send plain text (no file context) |
 
 ### Commands
-- `:ContextBridgeSend` - Send visual selection or range
-- `:ContextBridgeSendLine` - Send current line
-- `:ContextBridgeSendFile` - Send entire file
-- `:ContextBridgeSelectPane` - Manually select agent pane
-- `:ContextBridgeClearCache` - Clear cached pane selection
+
+**Send commands** (submit automatically):
+| Command | Action |
+|---------|--------|
+| `:ContextBridgeSend` | Send visual selection or range |
+| `:ContextBridgeSendLine` | Send current line |
+| `:ContextBridgeSendFile` | Send file metadata |
+| `:ContextBridgeSendFileContents` | Send entire file contents |
+| `:ContextBridgeSendText` | Send plain text |
+
+**Stage commands** (send without submitting - for multi-part prompts):
+| Command | Action |
+|---------|--------|
+| `:ContextBridgeStage` | Stage visual selection or range |
+| `:ContextBridgeStageLine` | Stage current line |
+| `:ContextBridgeStageFile` | Stage file metadata |
+| `:ContextBridgeStageFileContents` | Stage entire file contents |
+| `:ContextBridgeStageText` | Stage plain text |
+
+**Pane management**:
+| Command | Action |
+|---------|--------|
+| `:ContextBridgeSelectPane` | Manually select agent pane |
+| `:ContextBridgeSetPane <id>` | Set pane ID directly |
+| `:ContextBridgeClearCache` | Clear cached pane selection |
+
+### Cancellation
+
+Press `Ctrl+C` during the context/question prompt to cancel.
 
 ## Message Format
 
@@ -96,6 +126,44 @@ end
 ```
 ```
 
+File metadata format (`,cf`):
+```
+Tell me about this file
+
+File: example.lua
+- Type: lua
+- Lines: 156
+- Size: 4.2KB
+```
+
+## Configuration
+
+```lua
+require('context-bridge').setup({
+  tmux_pane = 'agent',           -- Default pane name hint
+  prompt_prefix = 'In file',     -- Prefix for file info
+  auto_submit = true,            -- Auto-submit after send (false = stage by default)
+  keymaps = {
+    visual_send = '<leader>cc',  -- Visual selection keymap
+    line_send = '<leader>cl',    -- Current line keymap
+    file_send = '<leader>cf',    -- File metadata keymap
+    text_send = '<leader>ct',    -- Plain text keymap
+  }
+})
+```
+
+### Configuration Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `tmux_pane` | `'agent'` | Hint for pane identification |
+| `prompt_prefix` | `'In file'` | Prefix shown before filename |
+| `auto_submit` | `true` | Whether to send Enter after message |
+| `keymaps.visual_send` | `'<leader>cc'` | Keymap for visual selection |
+| `keymaps.line_send` | `'<leader>cl'` | Keymap for current line |
+| `keymaps.file_send` | `'<leader>cf'` | Keymap for file metadata |
+| `keymaps.text_send` | `'<leader>ct'` | Keymap for plain text |
+
 ## How It Works
 
 ### Pane Detection
@@ -108,28 +176,28 @@ end
 - tmux
 - Any terminal-based AI agent (Claude Code, ChatGPT CLI, etc.)
 
-## Configuration
-
-```lua
-require('context-bridge').setup({
-  tmux_pane = 'agent',           -- Default pane name hint
-  prompt_prefix = 'In file',     -- Prefix for file info
-  keymaps = {
-    visual_send = '<leader>cc',  -- Visual selection keymap
-    line_send = '<leader>cl',    -- Current line keymap
-    file_send = '<leader>cf',    -- Entire file keymap
-  }
-})
-```
-
 ## Compatible AI Agents
 
 This plugin works with any terminal-based AI tool:
 - Claude Code
 - ChatGPT CLI tools
 - GitHub Copilot CLI
+- Aider
 - Custom AI scripts
 - Any interactive terminal application
+
+## Development
+
+### Running Tests
+
+The plugin includes integration tests that run in an isolated tmux environment:
+
+```bash
+./test/integration_test.sh           # Run all tests
+./test/integration_test.sh --watch   # Wait before tests, attach after
+./test/integration_test.sh --attach  # Manual testing mode
+./test/integration_test.sh --debug   # Verbose output
+```
 
 ## Contributing
 

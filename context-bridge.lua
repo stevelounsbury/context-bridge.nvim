@@ -7,11 +7,13 @@ local M = {}
 M.config = {
   tmux_pane = 'agent',
   prompt_prefix = 'In file',
+  auto_submit = true,  -- Send Enter after message by default
   debug = false,
   keymaps = {
     visual_send = '<leader>cc',
     line_send = '<leader>cl',
     file_send = '<leader>cf',
+    text_send = '<leader>ct',
   }
 }
 
@@ -127,37 +129,42 @@ function M.clear_cache()
 end
 
 -- Send a pre-formatted message to the agent pane
-local function send_message_to_agent(message, context)
+-- If submit is nil, uses config.auto_submit; if false, stages without submitting
+local function send_message_to_agent(message, context, submit)
   local pane_id = M.get_agent_pane(false)
   if not pane_id then
     vim.notify("Error: Could not find agent tmux pane", vim.log.levels.ERROR)
     return
   end
 
-  -- Prepend context if provided
+  -- Default submit to config setting
+  if submit == nil then
+    submit = M.config.auto_submit
+  end
+
+  -- Build full message with context prefix and trailing newlines
   local full_message = ''
   if context and context ~= '' then
     full_message = context .. '\n\n'
   end
-  full_message = full_message .. message
-
-  -- Clear any existing input in agent
-  os.execute('tmux send-keys -t ' .. pane_id .. ' C-c')
-  vim.wait(200)
+  full_message = full_message .. message .. '\n\n'
 
   -- Send the entire message as literal text (preserves newlines)
   local escaped_message = full_message:gsub("'", "'\"'\"'")
   os.execute(string.format("tmux send-keys -t %s -l '%s'", pane_id, escaped_message))
 
-  -- Small delay then send Enter to submit
-  vim.wait(100)
-  os.execute('tmux send-keys -t ' .. pane_id .. ' Enter')
-
-  vim.notify('Sent to agent (pane ' .. pane_id .. ')', vim.log.levels.INFO)
+  -- Send Enter to submit if requested
+  if submit then
+    vim.wait(100)
+    os.execute('tmux send-keys -t ' .. pane_id .. ' Enter')
+    vim.notify('Sent to agent (pane ' .. pane_id .. ')', vim.log.levels.INFO)
+  else
+    vim.notify('Staged in agent (pane ' .. pane_id .. ') - not submitted', vim.log.levels.INFO)
+  end
 end
 
 -- Send code with file/line context to agent
-local function send_to_agent(text, context, start_line, end_line)
+local function send_to_agent(text, context, start_line, end_line, submit)
   local relative_filename = vim.fn.expand('%')
   local filetype = vim.bo.filetype
 
@@ -172,7 +179,7 @@ local function send_to_agent(text, context, start_line, end_line)
   -- Add code block
   message = message .. '\n\n```' .. filetype .. '\n' .. text .. '\n```'
 
-  send_message_to_agent(message, context)
+  send_message_to_agent(message, context, submit)
 end
 
 -- Get visual selection
@@ -215,8 +222,8 @@ local function get_context_input()
   return context
 end
 
--- Send visual selection
-function M.send_visual()
+-- Send visual selection (submit=nil uses config default, false stages without submitting)
+function M.send_visual(submit)
   local text, start_line, end_line = M.get_visual_selection()
   if not text or text == '' then
     vim.notify('No text selected', vim.log.levels.WARN)
@@ -228,11 +235,11 @@ function M.send_visual()
     return
   end
 
-  send_to_agent(text, context, start_line, end_line)
+  send_to_agent(text, context, start_line, end_line, submit)
 end
 
--- Send current line
-function M.send_line()
+-- Send current line (submit=nil uses config default, false stages without submitting)
+function M.send_line(submit)
   local current_line = vim.fn.line('.')
   local text = vim.fn.getline(current_line)
 
@@ -246,7 +253,7 @@ function M.send_line()
     return
   end
 
-  send_to_agent(text, context, current_line, current_line)
+  send_to_agent(text, context, current_line, current_line, submit)
 end
 
 -- Format file size for display
@@ -261,7 +268,7 @@ local function format_file_size(bytes)
 end
 
 -- Send file reference (metadata only, not full contents)
-function M.send_file()
+function M.send_file(submit)
   local context = get_context_input()
   if context == nil then
     return
@@ -276,12 +283,11 @@ function M.send_file()
   local metadata = string.format("File: %s\n- Type: %s\n- Lines: %d\n- Size: %s",
     relative_filename, filetype, total_lines, format_file_size(file_size))
 
-  -- Use send_message_to_agent for consistent tmux handling
-  send_message_to_agent(metadata, context)
+  send_message_to_agent(metadata, context, submit)
 end
 
 -- Send entire file contents (use when full code is needed)
-function M.send_file_contents()
+function M.send_file_contents(submit)
   local lines = vim.api.nvim_buf_get_lines(0, 0, -1, false)
   local text = table.concat(lines, '\n')
   local total_lines = vim.fn.line('$')
@@ -291,11 +297,11 @@ function M.send_file_contents()
     return
   end
 
-  send_to_agent(text, context, 1, total_lines)
+  send_to_agent(text, context, 1, total_lines, submit)
 end
 
 -- Send a specific range
-function M.send_range(start_line, end_line)
+function M.send_range(start_line, end_line, submit)
   local lines = vim.fn.getline(start_line, end_line)
   local text = table.concat(lines, '\n')
 
@@ -304,11 +310,29 @@ function M.send_range(start_line, end_line)
     return
   end
 
-  send_to_agent(text, context, start_line, end_line)
+  send_to_agent(text, context, start_line, end_line, submit)
+end
+
+-- Send plain text without file/code context
+function M.send_text(submit)
+  local text = vim.fn.input('Text to send: ')
+  if text == '' then
+    vim.notify('No text entered', vim.log.levels.WARN)
+    return
+  end
+
+  -- Check for cancel
+  if vim.v.errmsg == "Interrupted" then
+    vim.notify('Cancelled', vim.log.levels.INFO)
+    return
+  end
+
+  send_message_to_agent(text, nil, submit)
 end
 
 -- Setup commands
 function M._setup_commands()
+  -- Send commands (auto-submit based on config)
   vim.api.nvim_create_user_command('ContextBridgeSend', function(opts)
     if opts.range == 2 then
       M.send_range(opts.line1, opts.line2)
@@ -316,20 +340,39 @@ function M._setup_commands()
       M.send_visual()
     end
   end, { range = true })
-  
-  vim.api.nvim_create_user_command('ContextBridgeSendLine', M.send_line, {})
-  vim.api.nvim_create_user_command('ContextBridgeSendFile', M.send_file, {})
-  vim.api.nvim_create_user_command('ContextBridgeSendFileContents', M.send_file_contents, {})
+  vim.api.nvim_create_user_command('ContextBridgeSendLine', function() M.send_line() end, {})
+  vim.api.nvim_create_user_command('ContextBridgeSendFile', function() M.send_file() end, {})
+  vim.api.nvim_create_user_command('ContextBridgeSendFileContents', function() M.send_file_contents() end, {})
+  vim.api.nvim_create_user_command('ContextBridgeSendText', function() M.send_text() end, {})
+
+  -- Stage commands (send without submitting)
+  vim.api.nvim_create_user_command('ContextBridgeStage', function(opts)
+    if opts.range == 2 then
+      M.send_range(opts.line1, opts.line2, false)
+    else
+      M.send_visual(false)
+    end
+  end, { range = true })
+  vim.api.nvim_create_user_command('ContextBridgeStageLine', function() M.send_line(false) end, {})
+  vim.api.nvim_create_user_command('ContextBridgeStageFile', function() M.send_file(false) end, {})
+  vim.api.nvim_create_user_command('ContextBridgeStageFileContents', function() M.send_file_contents(false) end, {})
+  vim.api.nvim_create_user_command('ContextBridgeStageText', function() M.send_text(false) end, {})
+
+  -- Pane management
   vim.api.nvim_create_user_command('ContextBridgeSelectPane', function()
     M.get_agent_pane(true)
   end, {})
+  vim.api.nvim_create_user_command('ContextBridgeSetPane', function(opts)
+    M._cached_pane = opts.args
+    vim.notify('Set agent pane to: ' .. opts.args, vim.log.levels.INFO)
+  end, { nargs = 1, desc = 'Set target pane ID explicitly' })
   vim.api.nvim_create_user_command('ContextBridgeClearCache', M.clear_cache, {})
 end
 
 -- Setup keymaps
 function M._setup_keymaps()
   local keymaps = M.config.keymaps
-  
+
   if keymaps.visual_send then
     vim.keymap.set('v', keymaps.visual_send, function()
       -- Exit visual mode first to set the '< and '> marks
@@ -339,17 +382,23 @@ function M._setup_keymaps()
       end)
     end, { desc = 'Send visual selection to agent' })
   end
-  
+
   if keymaps.line_send then
     vim.keymap.set('n', keymaps.line_send, function()
       M.send_line()
     end, { desc = 'Send current line to agent' })
   end
-  
+
   if keymaps.file_send then
     vim.keymap.set('n', keymaps.file_send, function()
       M.send_file()
     end, { desc = 'Send file reference to agent' })
+  end
+
+  if keymaps.text_send then
+    vim.keymap.set('n', keymaps.text_send, function()
+      M.send_text()
+    end, { desc = 'Send plain text to agent' })
   end
 end
 

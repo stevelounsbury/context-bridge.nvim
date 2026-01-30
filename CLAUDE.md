@@ -27,14 +27,15 @@ Context Bridge is a Neovim plugin that enables seamless integration with any AI 
 - **Persistent caching** - Remembers selected pane across uses until cleared
 
 ### Auto-Submission
-- **Input clearing** - Sends Ctrl+C to clear any existing input
+- **Configurable** - `auto_submit` option controls whether Enter is sent (default: true)
 - **Reliable text transfer** - Uses proper shell escaping with literal mode
-- **Automatic submission** - Sends Enter key after message for hands-free operation
+- **Stage mode** - Use Stage commands to send without submitting, allowing multiple chunks
 
 ### Multiple Input Methods
 - Visual selection with context (`<leader>cc`)
 - Current line with context (`<leader>cl`)
 - File reference/metadata (`<leader>cf`) - sends filename, type, line count, size
+- Plain text without file context (`<leader>ct`)
 - Full file contents via `:ContextBridgeSendFileContents` command
 - Custom line ranges via commands
 - Proper file and line number reporting
@@ -47,10 +48,12 @@ Context Bridge is a Neovim plugin that enables seamless integration with any AI 
 require('context-bridge').setup({
   tmux_pane = 'agent',
   prompt_prefix = 'In file',
+  auto_submit = true,  -- Set to false to stage by default
   keymaps = {
     visual_send = '<leader>cc',
     line_send = '<leader>cl',
     file_send = '<leader>cf',
+    text_send = '<leader>ct',
   }
 })
 ```
@@ -61,12 +64,25 @@ require('context-bridge').setup({
 - `,cc` - Send visual selection to agent
 - `,cl` - Send current line to agent
 - `,cf` - Send file reference (metadata only: name, type, lines, size)
+- `,ct` - Send plain text to agent (no file/code context)
 
 ### Commands
+
+**Send commands** (auto-submit based on config):
 - `:ContextBridgeSend` - Send visual selection or range
 - `:ContextBridgeSendLine` - Send current line
 - `:ContextBridgeSendFile` - Send file reference (metadata only)
 - `:ContextBridgeSendFileContents` - Send entire file contents
+- `:ContextBridgeSendText` - Send plain text (no file/code context)
+
+**Stage commands** (send without submitting - for building multi-part prompts):
+- `:ContextBridgeStage` - Stage visual selection or range
+- `:ContextBridgeStageLine` - Stage current line
+- `:ContextBridgeStageFile` - Stage file reference
+- `:ContextBridgeStageFileContents` - Stage entire file contents
+- `:ContextBridgeStageText` - Stage plain text
+
+**Pane management**:
 - `:ContextBridgeSelectPane` - Force pane re-selection
 - `:ContextBridgeSetPane <pane_id>` - Set target pane explicitly (useful for testing)
 - `:ContextBridgeClearCache` - Clear cached pane selection
@@ -80,7 +96,12 @@ Press `Ctrl+C` during the context/question prompt to cancel the operation.
 :lua require('context-bridge').send_visual()
 :lua require('context-bridge').send_file()
 :lua require('context-bridge').send_file_contents()
+:lua require('context-bridge').send_text()
 :lua require('context-bridge').get_agent_pane()
+
+-- Stage variants (pass false to not submit)
+:lua require('context-bridge').send_line(false)
+:lua require('context-bridge').send_visual(false)
 ```
 
 ## Message Format
@@ -126,6 +147,8 @@ In file [relative_filename] (lines X-Y):
 7. **Added Ctrl+C cancellation** - pressing Ctrl+C during context prompt cancels the operation
 8. **Changed file send to metadata** - `send_file()` now sends reference info, added `send_file_contents()` for full contents
 9. **Added integration tests** - automated tests using isolated tmux server (`test/integration_test.sh`)
+10. **Added stage mode** - removed Ctrl+C clearing, added stage commands for multi-part prompts
+11. **Added plain text send** - `send_text()` function for sending text without file/code context
 
 ## Current Status
 
