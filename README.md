@@ -71,12 +71,21 @@ use {
 
 ### Keymaps (with default leader `,`)
 
+**Send keymaps** (auto-submit):
 | Keymap | Action |
 |--------|--------|
 | `,cc` | Send visual selection to agent |
 | `,cl` | Send current line to agent |
 | `,cf` | Send file metadata (name, type, lines, size) |
 | `,ct` | Send plain text (no file context) |
+
+**Stage keymaps** (no submit - for multi-part prompts):
+| Keymap | Action |
+|--------|--------|
+| `,sc` | Stage visual selection |
+| `,sl` | Stage current line |
+| `,sb` | Stage file metadata |
+| `,st` | Stage plain text |
 
 ### Commands
 
@@ -144,10 +153,16 @@ require('context-bridge').setup({
   prompt_prefix = 'In file',     -- Prefix for file info
   auto_submit = true,            -- Auto-submit after send (false = stage by default)
   keymaps = {
-    visual_send = '<leader>cc',  -- Visual selection keymap
-    line_send = '<leader>cl',    -- Current line keymap
-    file_send = '<leader>cf',    -- File metadata keymap
-    text_send = '<leader>ct',    -- Plain text keymap
+    -- Send keymaps (auto-submit)
+    visual_send = '<leader>cc',
+    line_send = '<leader>cl',
+    file_send = '<leader>cf',
+    text_send = '<leader>ct',
+    -- Stage keymaps (no submit) - set to false to disable
+    visual_stage = '<leader>sc',
+    line_stage = '<leader>sl',
+    file_stage = '<leader>sb',
+    text_stage = '<leader>st',
   }
 })
 ```
@@ -159,10 +174,14 @@ require('context-bridge').setup({
 | `tmux_pane` | `'agent'` | Hint for pane identification |
 | `prompt_prefix` | `'In file'` | Prefix shown before filename |
 | `auto_submit` | `true` | Whether to send Enter after message |
-| `keymaps.visual_send` | `'<leader>cc'` | Keymap for visual selection |
-| `keymaps.line_send` | `'<leader>cl'` | Keymap for current line |
-| `keymaps.file_send` | `'<leader>cf'` | Keymap for file metadata |
-| `keymaps.text_send` | `'<leader>ct'` | Keymap for plain text |
+| `keymaps.visual_send` | `'<leader>cc'` | Send visual selection |
+| `keymaps.line_send` | `'<leader>cl'` | Send current line |
+| `keymaps.file_send` | `'<leader>cf'` | Send file metadata |
+| `keymaps.text_send` | `'<leader>ct'` | Send plain text |
+| `keymaps.visual_stage` | `'<leader>sc'` | Stage visual selection (no submit) |
+| `keymaps.line_stage` | `'<leader>sl'` | Stage current line (no submit) |
+| `keymaps.file_stage` | `'<leader>sb'` | Stage file metadata (no submit) |
+| `keymaps.text_stage` | `'<leader>st'` | Stage plain text (no submit) |
 
 ## How It Works
 

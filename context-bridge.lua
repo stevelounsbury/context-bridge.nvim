@@ -10,10 +10,16 @@ M.config = {
   auto_submit = true,  -- Send Enter after message by default
   debug = false,
   keymaps = {
+    -- Send keymaps (auto-submit)
     visual_send = '<leader>cc',
     line_send = '<leader>cl',
     file_send = '<leader>cf',
     text_send = '<leader>ct',
+    -- Stage keymaps (no submit) - set to false to disable
+    visual_stage = '<leader>sc',
+    line_stage = '<leader>sl',
+    file_stage = '<leader>sb',
+    text_stage = '<leader>st',
   }
 }
 
@@ -373,6 +379,7 @@ end
 function M._setup_keymaps()
   local keymaps = M.config.keymaps
 
+  -- Send keymaps (auto-submit)
   if keymaps.visual_send then
     vim.keymap.set('v', keymaps.visual_send, function()
       -- Exit visual mode first to set the '< and '> marks
@@ -399,6 +406,34 @@ function M._setup_keymaps()
     vim.keymap.set('n', keymaps.text_send, function()
       M.send_text()
     end, { desc = 'Send plain text to agent' })
+  end
+
+  -- Stage keymaps (no submit)
+  if keymaps.visual_stage then
+    vim.keymap.set('v', keymaps.visual_stage, function()
+      vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes('<Esc>', true, false, true), 'n', false)
+      vim.schedule(function()
+        M.send_visual(false)
+      end)
+    end, { desc = 'Stage visual selection (no submit)' })
+  end
+
+  if keymaps.line_stage then
+    vim.keymap.set('n', keymaps.line_stage, function()
+      M.send_line(false)
+    end, { desc = 'Stage current line (no submit)' })
+  end
+
+  if keymaps.file_stage then
+    vim.keymap.set('n', keymaps.file_stage, function()
+      M.send_file(false)
+    end, { desc = 'Stage file reference (no submit)' })
+  end
+
+  if keymaps.text_stage then
+    vim.keymap.set('n', keymaps.text_stage, function()
+      M.send_text(false)
+    end, { desc = 'Stage plain text (no submit)' })
   end
 end
 

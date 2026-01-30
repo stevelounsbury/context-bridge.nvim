@@ -50,10 +50,16 @@ require('context-bridge').setup({
   prompt_prefix = 'In file',
   auto_submit = true,  -- Set to false to stage by default
   keymaps = {
+    -- Send (auto-submit)
     visual_send = '<leader>cc',
     line_send = '<leader>cl',
     file_send = '<leader>cf',
     text_send = '<leader>ct',
+    -- Stage (no submit)
+    visual_stage = '<leader>sc',
+    line_stage = '<leader>sl',
+    file_stage = '<leader>sb',
+    text_stage = '<leader>st',
   }
 })
 ```
@@ -61,10 +67,18 @@ require('context-bridge').setup({
 ## Usage
 
 ### Keymaps
+
+**Send** (auto-submit):
 - `,cc` - Send visual selection to agent
 - `,cl` - Send current line to agent
 - `,cf` - Send file reference (metadata only: name, type, lines, size)
 - `,ct` - Send plain text to agent (no file/code context)
+
+**Stage** (no submit - for multi-part prompts):
+- `,sc` - Stage visual selection
+- `,sl` - Stage current line
+- `,sb` - Stage file metadata
+- `,st` - Stage plain text
 
 ### Commands
 
